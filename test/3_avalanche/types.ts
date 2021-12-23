@@ -1,7 +1,7 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/dist/src/signer-with-address";
 import { Fixture } from "ethereum-waffle";
-import { HarvestFinanceAdapter } from "../../typechain/HarvestFinanceAdapter";
-import { IUniswapV2Router02 } from "../../typechain/IUniswapV2Router02";
+import { PangolinFarmingAdapter } from "../../typechain/PangolinFarmingAdapter";
+import { IPangolinRouter } from "../../typechain/IPangolinRouter";
 import { TestDeFiAdapter } from "../../typechain/TestDeFiAdapter";
 
 export interface Signers {
@@ -14,7 +14,7 @@ export interface Signers {
   dave: SignerWithAddress;
   eve: SignerWithAddress;
   daiWhale: SignerWithAddress;
-  usdtWhale: SignerWithAddress;
+  avaxWhale: SignerWithAddress;
   wethWhale: SignerWithAddress;
 }
 
@@ -33,9 +33,9 @@ export interface LiquidityPool {
 
 declare module "mocha" {
   export interface Context {
-    harvestFinanceAdapter: HarvestFinanceAdapter;
+    harvestFinanceAdapter: PangolinFarmingAdapter;
     testDeFiAdapter: TestDeFiAdapter;
-    uniswapV2Router02: IUniswapV2Router02;
+    pangolinRouter: IPangolinRouter;
     loadFixture: <T>(fixture: Fixture<T>) => Promise<T>;
     signers: Signers;
   }

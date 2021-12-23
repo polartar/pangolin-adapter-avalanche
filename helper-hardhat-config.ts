@@ -1,3 +1,5 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
 import { HardhatNetworkForkingUserConfig } from "hardhat/types";
 import { resolve } from "path";
 import { config as dotenvConfig } from "dotenv";
@@ -139,7 +141,7 @@ export const buildForkConfig = (): HardhatNetworkForkingUserConfig | undefined =
     if (FORK_BLOCK_NUMBER || BLOCK_TO_FORK[FORK]) {
       forkMode.blockNumber = FORK_BLOCK_NUMBER || BLOCK_TO_FORK[FORK];
     }
-
+    console.log(forkMode);
     return forkMode;
   }
   return undefined;

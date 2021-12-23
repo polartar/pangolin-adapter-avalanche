@@ -1,0 +1,16 @@
+{
+  "avax": {
+    "pool": "0x1f806f7C8dED893fd3caE279191ad7Aa3798E928",
+    "stakingPool": "0xbA09679Ab223C6bdaf44D45Ba2d7279959289AB0",
+    "lpToken": "0xbA09679Ab223C6bdaf44D45Ba2d7279959289AB0",
+    "tokens": ["0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7"],
+    "rewardTokens": ["0x60781C2586D68229fde47564546784ab3fACA982"]
+  },
+  "dai": {
+    "pool": "0x1f806f7C8dED893fd3caE279191ad7Aa3798E928",
+    "stakingPool": "0xbA09679Ab223C6bdaf44D45Ba2d7279959289AB0",
+    "lpToken": "0xbA09679Ab223C6bdaf44D45Ba2d7279959289AB0",
+    "tokens": ["0xd586E7F844cEa2F87f50152665BCbc2C279D8d70"],
+    "rewardTokens": ["0x60781C2586D68229fde47564546784ab3fACA982"]
+  }
+}

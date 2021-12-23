@@ -1,5 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
 import "@nomiclabs/hardhat-waffle";
 import "@typechain/hardhat";
 import "solidity-coverage";
@@ -26,7 +28,7 @@ const SKIP_LOAD = process.env.SKIP_LOAD === "true";
 const HARDFORK = "london";
 const MNEMONIC_PATH = "m/44'/60'/0'/0";
 const MNEMONIC = process.env.MNEMONIC || "";
-const NETWORK = process.env.NETWORK || "hardhat";
+const NETWORK = process.env.NETWORK || "avalanche";
 
 // Prevent to load scripts before compilation and typechain
 if (!SKIP_LOAD) {

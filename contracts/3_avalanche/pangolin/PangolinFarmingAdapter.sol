@@ -322,21 +322,21 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
     function getDepositSomeCodes(
         address payable,
         address _underlyingToken, // LP token
-        address _liquidityPool, // MINICHEF_ADDRESS
+        address _depositAddress, // MINICHEF_ADDRESS
         uint256 _amount
     ) public view override returns (bytes[] memory _codes) {
-        uint256 _depositAmount = _getDepositAmount(MINICHEF_ADDRESS, _underlyingToken, _amount);
+        uint256 _depositAmount = _getDepositAmount(_depositAddress, _underlyingToken, _amount);
         if (_depositAmount > 0) {
             _codes = new bytes[](3);
             _codes[0] = abi.encode(
                 _underlyingToken,
-                abi.encodeWithSignature("approve(address,uint256)", MINICHEF_ADDRESS, uint256(0))
+                abi.encodeWithSignature("approve(address,uint256)", _depositAddress, uint256(0))
             );
             _codes[1] = abi.encode(
                 _underlyingToken,
-                abi.encodeWithSignature("approve(address,uint256)", MINICHEF_ADDRESS, _depositAmount)
+                abi.encodeWithSignature("approve(address,uint256)", _depositAddress, _depositAmount)
             );
-            _codes[2] = abi.encode(MINICHEF_ADDRESS, abi.encodeWithSignature("deposit(uint256)", _depositAmount));
+            _codes[2] = abi.encode(_depositAddress, abi.encodeWithSignature("deposit(uint256)", _depositAmount));
         }
     }
 
