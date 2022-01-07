@@ -9,13 +9,15 @@ export interface Signers {
   owner: SignerWithAddress;
   deployer: SignerWithAddress;
   alice: SignerWithAddress;
+  operator: SignerWithAddress;
   bob: SignerWithAddress;
   charlie: SignerWithAddress;
   dave: SignerWithAddress;
   eve: SignerWithAddress;
   daiWhale: SignerWithAddress;
-  avaxWhale: SignerWithAddress;
+  pngWhale: SignerWithAddress;
   wethWhale: SignerWithAddress;
+  avaxWhale: SignerWithAddress;
 }
 
 export interface PoolItem {

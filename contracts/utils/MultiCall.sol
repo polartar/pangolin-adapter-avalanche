@@ -5,6 +5,7 @@ pragma experimental ABIEncoderV2;
 
 // interfaces
 import { IMultiCall } from "./interfaces/IMultiCall.sol";
+import "hardhat/console.sol";
 
 /////////////////////////////////////////////////////
 /// PLEASE DO NOT USE THIS CONTRACT IN PRODUCTION ///

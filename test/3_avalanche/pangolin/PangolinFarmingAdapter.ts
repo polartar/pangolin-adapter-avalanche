@@ -15,27 +15,34 @@ const { deployContract } = hre.waffle;
 describe("Unit tests", function () {
   before(async function () {
     this.signers = {} as Signers;
-    const DAI_ADDRESS: string = getAddress("0xd586E7F844cEa2F87f50152665BCbc2C279D8d70");
-    const AVAX_ADDRESS: string = getAddress("0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7");
-    const DAI_WHALE: string = getAddress("0xe456f9A32E5f11035ffBEa0e97D1aAFDA6e60F03");
-    const AVAX_WHALE: string = getAddress("0xe456f9A32E5f11035ffBEa0e97D1aAFDA6e60F03");
+    // const DAI_ADDRESS: string = getAddress("0xd586E7F844cEa2F87f50152665BCbc2C279D8d70");
+    // const USDC_ADDRESS: string = getAddress("0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664");
+    // const DAI_WHALE: string = getAddress("0xd4456Fec7bA0F3daf0A99FE6D90BAbFf1641B63C");
+    // const USDC_WHALE: string = getAddress("0xDD21BE69bADB67067b9cea9227cC701551A545c6");
+    const AVAX_DAI_LP: string = getAddress("0xbA09679Ab223C6bdaf44D45Ba2d7279959289AB0");
+    const AVAX_PNG_LP: string = getAddress("0xd7538cABBf8605BdE1f4901B47B8D42c61DE0367");
+    const AVAX_DAI_WHALE: string = getAddress("0xe06142615991dee64ca813085779fadcc70431eb");
+    const AVAX_PNG_WHALE: string = getAddress("0xC815A5d9EC71840c21E9AD9090a7879EE23f5aae");
     const signers: SignerWithAddress[] = await hre.ethers.getSigners();
     await hre.network.provider.request({
       method: "hardhat_impersonateAccount",
-      params: [DAI_WHALE],
+      params: [AVAX_DAI_WHALE],
     });
     await hre.network.provider.request({
       method: "hardhat_impersonateAccount",
-      params: [AVAX_WHALE],
+      params: [AVAX_PNG_WHALE],
     });
+
     this.signers.admin = signers[0];
     this.signers.owner = signers[1];
     this.signers.deployer = signers[2];
     this.signers.alice = signers[3];
-    this.signers.daiWhale = await hre.ethers.getSigner(DAI_WHALE);
-    this.signers.avaxWhale = await hre.ethers.getSigner(AVAX_WHALE);
-    const dai = await hre.ethers.getContractAt("IERC20", DAI_ADDRESS, this.signers.daiWhale);
-    const avax = await hre.ethers.getContractAt("IERC20", AVAX_ADDRESS, this.signers.avaxWhale);
+    this.signers.operator = await hre.ethers.getSigner("0xe456f9A32E5f11035ffBEa0e97D1aAFDA6e60F03");
+    this.signers.daiWhale = await hre.ethers.getSigner(AVAX_DAI_WHALE);
+    this.signers.pngWhale = await hre.ethers.getSigner(AVAX_PNG_WHALE);
+
+    const dai = await hre.ethers.getContractAt("IERC20", AVAX_DAI_LP, this.signers.daiWhale);
+    const png = await hre.ethers.getContractAt("IERC20", AVAX_PNG_LP, this.signers.pngWhale);
 
     // get the PangolinV2Router contract instance
     this.pangolinV2Router = <IPangolinRouter>(
@@ -53,52 +60,79 @@ describe("Unit tests", function () {
     this.testDeFiAdapter = <TestDeFiAdapter>(
       await deployContract(this.signers.deployer, testDeFiAdapterArtifact, [], getOverrideOptions())
     );
+    await hre.network.provider.request({
+      method: "hardhat_impersonateAccount",
+      params: [this.testDeFiAdapter.address],
+    });
     // fund the whale's wallet with gas
     await this.signers.admin.sendTransaction({
-      to: DAI_WHALE,
-      value: hre.ethers.utils.parseEther("100"),
-      ...getOverrideOptions(),
-    });
-    await this.signers.admin.sendTransaction({
-      to: AVAX_WHALE,
-      value: hre.ethers.utils.parseEther("100"),
+      to: AVAX_DAI_WHALE,
+      value: hre.ethers.utils.parseEther("10"),
       ...getOverrideOptions(),
     });
 
-    // fund TestDeFiAdapter with 10000 tokens each
-    console.log(await dai.balanceOf(this.signers.admin.address));
-    await dai.transfer(this.testDeFiAdapter.address, hre.ethers.utils.parseEther("10000"), getOverrideOptions());
-    await avax.transfer(this.testDeFiAdapter.address, hre.ethers.utils.parseUnits("10000", 6), getOverrideOptions());
+    await this.signers.admin.sendTransaction({
+      to: AVAX_PNG_WHALE,
+      value: hre.ethers.utils.parseEther("10"),
+      ...getOverrideOptions(),
+    });
+
+    // impersonate operator
+    await hre.network.provider.request({
+      method: "hardhat_impersonateAccount",
+      params: [this.signers.operator.address],
+    });
+    await this.signers.admin.sendTransaction({
+      to: this.testDeFiAdapter.address,
+      value: hre.ethers.utils.parseEther("50"),
+      ...getOverrideOptions(),
+    });
+
+    // fund TestDeFiAdapter with 500 tokens each
+    await dai.transfer(this.testDeFiAdapter.address, 90, getOverrideOptions());
+    await png.transfer(this.testDeFiAdapter.address, 150, getOverrideOptions());
+
+    // await hre.network.provider.request({
+    //   method: "hardhat_impersonateAccount",
+    //   params: [getAddress('0x1f806f7C8dED893fd3caE279191ad7Aa3798E928')],
+    // });
+    // await hre.network.provider.request({
+    //   method: "hardhat_impersonateAccount",
+    //   params: [AVAX_DAI_LP],
+    // });
 
     // whitelist TestDeFiAdapter contract into Pangolin's Vaults
     // by impersonating the governance's address
-    const tokenNames = Object.keys(PangolinFarmingPools);
-    for (const tokenName of tokenNames) {
-      const { pool } = (PangolinFarmingPools as LiquidityPool)[tokenName];
-      const pangolinVault = await hre.ethers.getContractAt("IHarvestDeposit", pool);
-      const governance = await pangolinVault.governance();
-      await hre.network.provider.request({
-        method: "hardhat_impersonateAccount",
-        params: [governance],
-      });
-      const harvestController = await hre.ethers.getContractAt(
-        "IHarvestController",
-        await pangolinVault.controller(),
-        await hre.ethers.getSigner(governance),
-      );
-      await this.signers.admin.sendTransaction({
-        to: governance,
-        value: hre.ethers.utils.parseEther("1000"),
-        ...getOverrideOptions(),
-      });
-      await harvestController.addToWhitelist(this.testDeFiAdapter.address, getOverrideOptions());
-      await harvestController.addCodeToWhitelist(this.testDeFiAdapter.address, getOverrideOptions());
-    }
+    // const tokenNames = Object.keys(PangolinFarmingPools);
+    // for (const tokenName of tokenNames) {
+    // const { pool } = (PangolinFarmingPools as LiquidityPool)[tokenName];
+    // const pangolinVault = await hre.ethers.getContractAt("IHarvestDeposit", pool);
+
+    // const governance = await pangolinVault.governance();
+
+    // await hre.network.provider.request({
+    //   method: "hardhat_impersonateAccount",
+    //   params: [0xab7FA2B2985BCcfC13c6D86b1D5A17486ab1e04C],
+    // });
+    // const harvestController = await hre.ethers.getContractAt(
+    //   "IHarvestController",
+    //   await pangolinVault.controller(),
+    //   await hre.ethers.getSigner(governance),
+    // );
+    // await this.signers.admin.sendTransaction({
+    //   to: governance,
+    //   value: hre.ethers.utils.parseEther("1000"),
+    //   ...getOverrideOptions(),
+    // });
+    // await harvestController.addToWhitelist(this.testDeFiAdapter.address, getOverrideOptions());
+    // await harvestController.addCodeToWhitelist(this.testDeFiAdapter.address, getOverrideOptions());
+    // }
   });
 
   describe("PangolinFarmingAdapter", function () {
-    Object.keys(PangolinFarmingPools).map((token: string) => {
-      shouldBehaveLikePangolinFarmingAdapter(token, (PangolinFarmingPools as LiquidityPool)[token]);
-    });
+    shouldBehaveLikePangolinFarmingAdapter("dai", (PangolinFarmingPools as LiquidityPool)["dai"]);
+    // Object.keys(PangolinFarmingPools).map((token: string) => {
+    //   shouldBehaveLikePangolinFarmingAdapter(token, (PangolinFarmingPools as LiquidityPool)[token]);
+    // });
   });
 });

@@ -13,7 +13,7 @@ import { SafeMath } from "@openzeppelin/contracts/math/SafeMath.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
 //  interfaces
-import { IHarvestDeposit } from "@optyfi/defi-legos/ethereum/harvest.finance/contracts/IHarvestDeposit.sol";
+import { IPangolinFarmingDeposit } from "../interfaces/IPangolinFarmingDeposit.sol";
 import { IHarvestFarm } from "@optyfi/defi-legos/ethereum/harvest.finance/contracts/IHarvestFarm.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IAdapter } from "@optyfi/defi-legos/interfaces/defiAdapters/contracts/IAdapter.sol";
@@ -22,6 +22,7 @@ import "@optyfi/defi-legos/interfaces/defiAdapters/contracts/IAdapterInvestLimit
 import { IAdapterHarvestReward } from "@optyfi/defi-legos/interfaces/defiAdapters/contracts/IAdapterHarvestReward.sol";
 // import { IUniswapV2Router02 } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import { IPangolinRouter } from "@pangolindex/exchange-contracts/contracts/pangolin-periphery/interfaces/IPangolinRouter.sol";
+import "hardhat/console.sol";
 
 /**
  * @title Adapter for Harvest.finance protocol
@@ -147,6 +148,7 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
         address _liquidityPool
     ) public view override returns (bytes[] memory _codes) {
         uint256 _amount = IERC20(_underlyingToken).balanceOf(_vault);
+
         return getDepositSomeCodes(_vault, _underlyingToken, _liquidityPool, _amount);
     }
 
@@ -172,7 +174,8 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
         returns (address[] memory _underlyingTokens)
     {
         _underlyingTokens = new address[](1);
-        _underlyingTokens[0] = IHarvestDeposit(_liquidityPool).underlying();
+        // _underlyingTokens[0] = IPangolinFarmingDeposit(_liquidityPool).underlying();
+        _underlyingTokens[0] = _liquidityPool;
     }
 
     /**
@@ -184,9 +187,10 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
         uint256 _depositAmount
     ) public view override returns (uint256) {
         return
-            _depositAmount.mul(10**IHarvestDeposit(_liquidityPool).decimals()).div(
-                IHarvestDeposit(_liquidityPool).getPricePerFullShare()
-            );
+            // _depositAmount.mul(10**IPangolinFarmingDeposit(_liquidityPool).decimals()).div(
+            //     IPangolinFarmingDeposit(_liquidityPool).getPricePerFullShare()
+            // );
+            _depositAmount;
     }
 
     /**
@@ -220,15 +224,20 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
     /**
      * @inheritdoc IAdapterHarvestReward
      */
-    function getClaimRewardTokenCode(address payable, address _liquidityPool)
+    function getClaimRewardTokenCode(address payable _vault, address _liquidityPool)
         public
         view
         override
         returns (bytes[] memory _codes)
     {
-        address _stakingVault = liquidityPoolToStakingVault[_liquidityPool];
+        uint256 pId = _getPID(IERC20(_liquidityPool));
         _codes = new bytes[](1);
-        _codes[0] = abi.encode(_stakingVault, abi.encodeWithSignature("getReward()"));
+        _codes[0] = abi.encode(MINICHEF_ADDRESS, abi.encodeWithSignature("harvest()", pId, _vault));
+    }
+
+    function getRewardBalance(address _vault, address _liquidityPool) public view returns (uint256) {
+        uint256 pId = _getPID(IERC20(_liquidityPool));
+        return IPangolinFarmingDeposit(MINICHEF_ADDRESS).pendingReward(pId, _vault);
     }
 
     /**
@@ -320,13 +329,15 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
      * @inheritdoc IAdapter
      */
     function getDepositSomeCodes(
-        address payable,
+        address payable vault,
         address _underlyingToken, // LP token
         address _depositAddress, // MINICHEF_ADDRESS
         uint256 _amount
     ) public view override returns (bytes[] memory _codes) {
         uint256 _depositAmount = _getDepositAmount(_depositAddress, _underlyingToken, _amount);
         if (_depositAmount > 0) {
+            uint256 pId = _getPID(IERC20(_underlyingToken));
+
             _codes = new bytes[](3);
             _codes[0] = abi.encode(
                 _underlyingToken,
@@ -336,7 +347,21 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
                 _underlyingToken,
                 abi.encodeWithSignature("approve(address,uint256)", _depositAddress, _depositAmount)
             );
-            _codes[2] = abi.encode(_depositAddress, abi.encodeWithSignature("deposit(uint256)", _depositAmount));
+            _codes[2] = abi.encode(
+                _depositAddress,
+                abi.encodeWithSignature("deposit(uint256,uint256,address)", pId, _depositAmount, vault)
+            );
+        }
+    }
+
+    function _getPID(IERC20 _lpToken) internal view returns (uint256) {
+        IERC20[] memory _lpTokens = IPangolinFarmingDeposit(MINICHEF_ADDRESS).lpTokens();
+        uint256 len = _lpTokens.length;
+
+        for (uint256 i = 0; i < len; i++) {
+            if (_lpTokens[i] == _lpToken) {
+                return i;
+            }
         }
     }
 
@@ -362,7 +387,7 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
      * @inheritdoc IAdapter
      */
     function getPoolValue(address _liquidityPool, address) public view override returns (uint256) {
-        return IHarvestDeposit(_liquidityPool).underlyingBalanceWithInvestment();
+        return IPangolinFarmingDeposit(_liquidityPool).totalAllocPoint();
     }
 
     /**
@@ -393,10 +418,12 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
      */
     function getLiquidityPoolTokenBalance(
         address payable _vault,
-        address,
-        address _liquidityPool
+        address _liquidityPool,
+        address _depositPool
     ) public view override returns (uint256) {
-        return IERC20(_liquidityPool).balanceOf(_vault);
+        uint256 pId = _getPID(IERC20(_liquidityPool));
+        return IPangolinFarmingDeposit(_depositPool).userInfo(pId, _vault).amount;
+        // return IERC20(_liquidityPool).balanceOf(_depositPool);
     }
 
     /**
@@ -407,11 +434,11 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
         address _liquidityPool,
         uint256 _liquidityPoolTokenAmount
     ) public view override returns (uint256) {
-        if (_liquidityPoolTokenAmount > 0) {
-            _liquidityPoolTokenAmount = _liquidityPoolTokenAmount
-                .mul(IHarvestDeposit(_liquidityPool).getPricePerFullShare())
-                .div(10**IHarvestDeposit(_liquidityPool).decimals());
-        }
+        // if (_liquidityPoolTokenAmount > 0) {
+        //     _liquidityPoolTokenAmount = _liquidityPoolTokenAmount
+        //         .mul(IPangolinFarmingDeposit(_liquidityPool).getPricePerFullShare())
+        //         .div(10**IPangolinFarmingDeposit(_liquidityPool).decimals());
+        // }
         return _liquidityPoolTokenAmount;
     }
 
@@ -506,8 +533,8 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
     //     address _stakingVault = liquidityPoolToStakingVault[_liquidityPool];
     //     uint256 b = IHarvestFarm(_stakingVault).balanceOf(_vault);
     //     if (b > 0) {
-    //         b = b.mul(IHarvestDeposit(_liquidityPool).getPricePerFullShare()).div(
-    //             10**IHarvestDeposit(_liquidityPool).decimals()
+    //         b = b.mul(IPangolinFarmingDeposit(_liquidityPool).getPricePerFullShare()).div(
+    //             10**IPangolinFarmingDeposit(_liquidityPool).decimals()
     //         );
     //     }
     //     uint256 _unclaimedReward = getUnclaimedRewardTokenAmount(_vault, _liquidityPool, _underlyingToken);
