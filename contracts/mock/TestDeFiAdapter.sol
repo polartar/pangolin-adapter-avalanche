@@ -18,29 +18,24 @@ import { MultiCall } from "../utils/MultiCall.sol";
 
 contract TestDeFiAdapter is MultiCall {
     function testGetDepositAllCodes(
-        address _underlyingToken,
         address _liquidityPool,
+        address _depositPool,
         address _adapter
     ) external {
         executeCodes(
-            IAdapterFull(_adapter).getDepositAllCodes(payable(address(this)), _underlyingToken, _liquidityPool),
+            IAdapterFull(_adapter).getDepositAllCodes(payable(address(this)), _liquidityPool, _depositPool),
             "depositAll"
         );
     }
 
     function testGetDepositSomeCodes(
-        address _underlyingToken,
         address _liquidityPool,
+        address _depositPool,
         address _adapter,
         uint256 _amount
     ) external {
         executeCodes(
-            IAdapterFull(_adapter).getDepositSomeCodes(
-                payable(address(this)),
-                _underlyingToken,
-                _liquidityPool,
-                _amount
-            ),
+            IAdapterFull(_adapter).getDepositSomeCodes(payable(address(this)), _liquidityPool, _depositPool, _amount),
             "depositSome"
         );
     }
@@ -131,12 +126,12 @@ contract TestDeFiAdapter is MultiCall {
     }
 
     function testGetWithdrawAllCodes(
-        address _underlyingToken,
         address _liquidityPool,
+        address _depositPool,
         address _adapter
     ) external {
         executeCodes(
-            IAdapterFull(_adapter).getWithdrawAllCodes(payable(address(this)), _underlyingToken, _liquidityPool),
+            IAdapterFull(_adapter).getWithdrawAllCodes(payable(address(this)), _liquidityPool, _depositPool),
             "withdrawAll"
         );
     }

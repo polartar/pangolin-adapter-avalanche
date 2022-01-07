@@ -18,9 +18,7 @@ import { IHarvestFarm } from "@optyfi/defi-legos/ethereum/harvest.finance/contra
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IAdapter } from "@optyfi/defi-legos/interfaces/defiAdapters/contracts/IAdapter.sol";
 import "@optyfi/defi-legos/interfaces/defiAdapters/contracts/IAdapterInvestLimit.sol";
-// import { IAdapterStaking } from "@optyfi/defi-legos/interfaces/defiAdapters/contracts/IAdapterStaking.sol";
 import { IAdapterHarvestReward } from "@optyfi/defi-legos/interfaces/defiAdapters/contracts/IAdapterHarvestReward.sol";
-// import { IUniswapV2Router02 } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import { IPangolinRouter } from "@pangolindex/exchange-contracts/contracts/pangolin-periphery/interfaces/IPangolinRouter.sol";
 import "hardhat/console.sol";
 
@@ -55,7 +53,7 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
     address public constant TUSD_DAI_POOL = 0x11cb8967c9CEBC2bC8349ad612301DaC843669ea;
     address public constant MIM_USDC_POOL = 0xE75eD6E50e3e2dc6b06FAf38b943560BD22e343B;
 
-    // deposit poools
+    // vault addresses
     address public constant AVAX_VAULT = 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7;
     address public constant AVAX_WETH_VAULT = 0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB;
     address public constant AVAX_USDT_VAULT = 0xc7198437980c041c805A1EDcbA50c1Ce5db95118;
@@ -72,9 +70,6 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
     /** @notice max deposit's default value in percentage */
     uint256 public maxDepositProtocolPct; // basis points
 
-    /** @notice Maps liquidityPool to staking vault */
-    mapping(address => address) public liquidityPoolToStakingVault;
-
     /** @notice  Maps liquidityPool to max deposit value in percentage */
     mapping(address => uint256) public maxDepositPoolPct; // basis points
 
@@ -82,20 +77,6 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
     mapping(address => mapping(address => uint256)) public maxDepositAmount;
 
     constructor() public {
-        // liquidityPoolToStakingVault[TBTC_SBTC_CRV_DEPOSIT_POOL] = TBTC_SBTC_CRV_STAKE_VAULT;
-        // liquidityPoolToStakingVault[THREE_CRV_DEPOSIT_POOL] = THREE_CRV_STAKE_VAULT;
-        // liquidityPoolToStakingVault[YDAI_YUSDC_YUSDT_YTUSD_DEPOSIT_POOL] = YDAI_YUSDC_YUSDT_YTUSD_STAKE_VAULT;
-        // liquidityPoolToStakingVault[F_DAI_DEPOSIT_POOL] = F_DAI_STAKE_VAULT;
-        // liquidityPoolToStakingVault[F_USDC_DEPOSIT_POOL] = F_USDC_STAKE_VAULT;
-        // liquidityPoolToStakingVault[F_USDT_DEPOSIT_POOL] = F_USDT_STAKE_VAULT;
-        // liquidityPoolToStakingVault[F_TUSD_DEPOSIT_POOL] = F_TUSD_STAKE_VAULT;
-        // liquidityPoolToStakingVault[F_CRV_REN_WBTC_DEPOSIT_POOL] = F_CRV_RENBTC_STAKE_VAULT;
-        // liquidityPoolToStakingVault[F_WBTC_DEPOSIT_POOL] = F_WBTC_STAKE_VAULT;
-        // liquidityPoolToStakingVault[F_RENBTC_DEPOSIT_POOL] = F_RENBTC_STAKE_VAULT;
-        // liquidityPoolToStakingVault[F_WETH_DEPOSIT_POOL] = F_WETH_STAKE_VAULT;
-        // liquidityPoolToStakingVault[F_CDAI_CUSDC_DEPOSIT_POOL] = F_CDAI_CUSDC_STAKE_VAULT;
-        // liquidityPoolToStakingVault[F_USDN_THREE_CRV_DEPOSIT_POOL] = F_USDN_THREE_CRV_STAKE_VAULT;
-        // liquidityPoolToStakingVault[F_YDAI_YUSDC_YUSDT_YBUSD_DEPOSIT_POOL] = F_YDAI_YUSDC_YUSDT_YBUSD_STAKE_VAULT;
         setMaxDepositProtocolPct(uint256(10000)); // 100% (basis points)
         setMaxDepositProtocolMode(MaxExposure.Pct);
     }
@@ -144,12 +125,12 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
      */
     function getDepositAllCodes(
         address payable _vault,
-        address _underlyingToken,
-        address _liquidityPool
+        address _liquidityPool,
+        address
     ) public view override returns (bytes[] memory _codes) {
-        uint256 _amount = IERC20(_underlyingToken).balanceOf(_vault);
+        uint256 _amount = IERC20(_liquidityPool).balanceOf(_vault);
 
-        return getDepositSomeCodes(_vault, _underlyingToken, _liquidityPool, _amount);
+        return getDepositSomeCodes(_vault, _liquidityPool, MINICHEF_ADDRESS, _amount);
     }
 
     /**
@@ -157,11 +138,11 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
      */
     function getWithdrawAllCodes(
         address payable _vault,
-        address _underlyingToken,
-        address _liquidityPool
+        address _liquidityPool,
+        address _depositPool
     ) public view override returns (bytes[] memory _codes) {
-        uint256 _redeemAmount = getLiquidityPoolTokenBalance(_vault, _underlyingToken, _liquidityPool);
-        return getWithdrawSomeCodes(_vault, _underlyingToken, _liquidityPool, _redeemAmount);
+        uint256 _redeemAmount = getLiquidityPoolTokenBalance(_vault, _liquidityPool, _depositPool);
+        return getWithdrawSomeCodes(_vault, _liquidityPool, _depositPool, _redeemAmount);
     }
 
     /**
@@ -186,11 +167,7 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
         address _liquidityPool,
         uint256 _depositAmount
     ) public view override returns (uint256) {
-        return
-            // _depositAmount.mul(10**IPangolinFarmingDeposit(_liquidityPool).decimals()).div(
-            //     IPangolinFarmingDeposit(_liquidityPool).getPricePerFullShare()
-            // );
-            _depositAmount;
+        return _depositAmount;
     }
 
     /**
@@ -245,11 +222,11 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
      */
     function getHarvestAllCodes(
         address payable _vault,
-        address _underlyingToken,
-        address _liquidityPool
+        address _liquidityPool,
+        address
     ) public view override returns (bytes[] memory _codes) {
-        uint256 _rewardTokenAmount = IERC20(getRewardToken(_liquidityPool)).balanceOf(_vault);
-        return getHarvestSomeCodes(_vault, _underlyingToken, _liquidityPool, _rewardTokenAmount);
+        uint256 _rewardTokenAmount = IERC20(getRewardToken(MINICHEF_ADDRESS)).balanceOf(_vault);
+        return getHarvestSomeCodes(_vault, _liquidityPool, MINICHEF_ADDRESS, _rewardTokenAmount);
     }
 
     /**
@@ -259,96 +236,30 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
         return true;
     }
 
-    // /**
-    //  * @inheritdoc IAdapterStaking
-    //  */
-    // function getStakeAllCodes(
-    //     address payable _vault,
-    //     address _underlyingToken,
-    //     address _liquidityPool
-    // ) public view override returns (bytes[] memory _codes) {
-    //     uint256 _depositAmount = getLiquidityPoolTokenBalance(_vault, _underlyingToken, _liquidityPool);
-    //     return getStakeSomeCodes(_liquidityPool, _depositAmount);
-    // }
-
-    // /**
-    //  * @inheritdoc IAdapterStaking
-    //  */
-    // function getUnstakeAllCodes(address payable _vault, address _liquidityPool)
-    //     public
-    //     view
-    //     override
-    //     returns (bytes[] memory _codes)
-    // {
-    //     uint256 _redeemAmount = getLiquidityPoolTokenBalanceStake(_vault, _liquidityPool);
-    //     return getUnstakeSomeCodes(_liquidityPool, _redeemAmount);
-    // }
-
-    // /**
-    //  * @inheritdoc IAdapterStaking
-    //  */
-    // function calculateRedeemableLPTokenAmountStake(
-    //     address payable _vault,
-    //     address _underlyingToken,
-    //     address _liquidityPool,
-    //     uint256 _redeemAmount
-    // ) public view override returns (uint256 _amount) {
-    //     address _stakingVault = liquidityPoolToStakingVault[_liquidityPool];
-    //     uint256 _liquidityPoolTokenBalance = IHarvestFarm(_stakingVault).balanceOf(_vault);
-    //     uint256 _balanceInToken = getAllAmountInTokenStake(_vault, _underlyingToken, _liquidityPool);
-    //     // can have unintentional rounding errors
-    //     _amount = (_liquidityPoolTokenBalance.mul(_redeemAmount)).div(_balanceInToken).add(1);
-    // }
-
-    // /**
-    //  * @inheritdoc IAdapterStaking
-    //  */
-    // function isRedeemableAmountSufficientStake(
-    //     address payable _vault,
-    //     address _underlyingToken,
-    //     address _liquidityPool,
-    //     uint256 _redeemAmount
-    // ) public view override returns (bool) {
-    //     uint256 _balanceInTokenStake = getAllAmountInTokenStake(_vault, _underlyingToken, _liquidityPool);
-    //     return _balanceInTokenStake >= _redeemAmount;
-    // }
-
-    // /**
-    //  * @inheritdoc IAdapterStaking
-    //  */
-    // function getUnstakeAndWithdrawAllCodes(
-    //     address payable _vault,
-    //     address _underlyingToken,
-    //     address _liquidityPool
-    // ) public view override returns (bytes[] memory _codes) {
-    //     uint256 _unstakeAmount = getLiquidityPoolTokenBalanceStake(_vault, _liquidityPool);
-    //     return getUnstakeAndWithdrawSomeCodes(_vault, _underlyingToken, _liquidityPool, _unstakeAmount);
-    // }
-
     /**
      * @inheritdoc IAdapter
      */
     function getDepositSomeCodes(
         address payable vault,
-        address _underlyingToken, // LP token
-        address _depositAddress, // MINICHEF_ADDRESS
+        address _liquidityPool, // LP token
+        address, // MINICHEF_ADDRESS
         uint256 _amount
     ) public view override returns (bytes[] memory _codes) {
-        uint256 _depositAmount = _getDepositAmount(_depositAddress, _underlyingToken, _amount);
+        uint256 _depositAmount = _getDepositAmount(MINICHEF_ADDRESS, _liquidityPool, _amount);
         if (_depositAmount > 0) {
-            uint256 pId = _getPID(IERC20(_underlyingToken));
+            uint256 pId = _getPID(IERC20(_liquidityPool));
 
             _codes = new bytes[](3);
             _codes[0] = abi.encode(
-                _underlyingToken,
-                abi.encodeWithSignature("approve(address,uint256)", _depositAddress, uint256(0))
+                _liquidityPool,
+                abi.encodeWithSignature("approve(address,uint256)", MINICHEF_ADDRESS, uint256(0))
             );
             _codes[1] = abi.encode(
-                _underlyingToken,
-                abi.encodeWithSignature("approve(address,uint256)", _depositAddress, _depositAmount)
+                _liquidityPool,
+                abi.encodeWithSignature("approve(address,uint256)", MINICHEF_ADDRESS, _depositAmount)
             );
             _codes[2] = abi.encode(
-                _depositAddress,
+                MINICHEF_ADDRESS,
                 abi.encodeWithSignature("deposit(uint256,uint256,address)", pId, _depositAmount, vault)
             );
         }
@@ -369,16 +280,17 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
      * @inheritdoc IAdapter
      */
     function getWithdrawSomeCodes(
-        address payable,
-        address _underlyingToken,
+        address payable _vault,
         address _liquidityPool,
+        address,
         uint256 _shares
     ) public view override returns (bytes[] memory _codes) {
         if (_shares > 0) {
+            uint256 pId = _getPID(IERC20(_liquidityPool));
             _codes = new bytes[](1);
             _codes[0] = abi.encode(
-                getLiquidityPoolToken(_underlyingToken, _liquidityPool),
-                abi.encodeWithSignature("withdraw(uint256)", _shares)
+                MINICHEF_ADDRESS,
+                abi.encodeWithSignature("withdraw(uint256,uint256,address)", pId, _shares, _vault)
             );
         }
     }
@@ -434,11 +346,6 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
         address _liquidityPool,
         uint256 _liquidityPoolTokenAmount
     ) public view override returns (uint256) {
-        // if (_liquidityPoolTokenAmount > 0) {
-        //     _liquidityPoolTokenAmount = _liquidityPoolTokenAmount
-        //         .mul(IPangolinFarmingDeposit(_liquidityPool).getPricePerFullShare())
-        //         .div(10**IPangolinFarmingDeposit(_liquidityPool).decimals());
-        // }
         return _liquidityPoolTokenAmount;
     }
 
@@ -457,7 +364,7 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
         address _liquidityPool,
         address
     ) public view override returns (uint256) {
-        return IHarvestFarm(liquidityPoolToStakingVault[_liquidityPool]).earned(_vault);
+        return IHarvestFarm(_liquidityPool).earned(_vault);
     }
 
     /**
@@ -479,115 +386,21 @@ contract PangolinFarmingAdapter is IAdapter, IAdapterHarvestReward, IAdapterInve
      */
     function getAddLiquidityCodes(address payable, address) public view override returns (bytes[] memory) {}
 
-    /* solhint-enable no-empty-blocks */
-
-    // /**
-    //  * @inheritdoc IAdapterStaking
-    //  */
-    // function getStakeSomeCodes(address _liquidityPool, uint256 _shares)
-    //     public
-    //     view
-    //     override
-    //     returns (bytes[] memory _codes)
-    // {
-    //     if (_shares > 0) {
-    //         address _stakingVault = liquidityPoolToStakingVault[_liquidityPool];
-    //         address _liquidityPoolToken = getLiquidityPoolToken(address(0), _liquidityPool);
-    //         _codes = new bytes[](3);
-    //         _codes[0] = abi.encode(
-    //             _liquidityPoolToken,
-    //             abi.encodeWithSignature("approve(address,uint256)", _stakingVault, uint256(0))
-    //         );
-    //         _codes[1] = abi.encode(
-    //             _liquidityPoolToken,
-    //             abi.encodeWithSignature("approve(address,uint256)", _stakingVault, _shares)
-    //         );
-    //         _codes[2] = abi.encode(_stakingVault, abi.encodeWithSignature("stake(uint256)", _shares));
-    //     }
-    // }
-
-    // /**
-    //  * @inheritdoc IAdapterStaking
-    //  */
-    // function getUnstakeSomeCodes(address _liquidityPool, uint256 _shares)
-    //     public
-    //     view
-    //     override
-    //     returns (bytes[] memory _codes)
-    // {
-    //     if (_shares > 0) {
-    //         address _stakingVault = liquidityPoolToStakingVault[_liquidityPool];
-    //         _codes = new bytes[](1);
-    //         _codes[0] = abi.encode(_stakingVault, abi.encodeWithSignature("withdraw(uint256)", _shares));
-    //     }
-    // }
-
-    // /**
-    //  * @inheritdoc IAdapterStaking
-    //  */
-    // function getAllAmountInTokenStake(
-    //     address payable _vault,
-    //     address _underlyingToken,
-    //     address _liquidityPool
-    // ) public view override returns (uint256) {
-    //     address _stakingVault = liquidityPoolToStakingVault[_liquidityPool];
-    //     uint256 b = IHarvestFarm(_stakingVault).balanceOf(_vault);
-    //     if (b > 0) {
-    //         b = b.mul(IPangolinFarmingDeposit(_liquidityPool).getPricePerFullShare()).div(
-    //             10**IPangolinFarmingDeposit(_liquidityPool).decimals()
-    //         );
-    //     }
-    //     uint256 _unclaimedReward = getUnclaimedRewardTokenAmount(_vault, _liquidityPool, _underlyingToken);
-    //     if (_unclaimedReward > 0) {
-    //         b = b.add(_getRewardBalanceInUnderlyingTokens(rewardToken, _underlyingToken, _unclaimedReward));
-    //     }
-    //     return b;
-    // }
-
-    // /**
-    //  * @inheritdoc IAdapterStaking
-    //  */
-    // function getLiquidityPoolTokenBalanceStake(address payable _vault, address _liquidityPool)
-    //     public
-    //     view
-    //     override
-    //     returns (uint256)
-    // {
-    //     address _stakingVault = liquidityPoolToStakingVault[_liquidityPool];
-    //     return IHarvestFarm(_stakingVault).balanceOf(_vault);
-    // }
-
-    // /**
-    //  * @inheritdoc IAdapterStaking
-    //  */
-    // function getUnstakeAndWithdrawSomeCodes(
-    //     address payable _vault,
-    //     address _underlyingToken,
-    //     address _liquidityPool,
-    //     uint256 _redeemAmount
-    // ) public view override returns (bytes[] memory _codes) {
-    //     if (_redeemAmount > 0) {
-    //         _codes = new bytes[](2);
-    //         _codes[0] = getUnstakeSomeCodes(_liquidityPool, _redeemAmount)[0];
-    //         _codes[1] = getWithdrawSomeCodes(_vault, _underlyingToken, _liquidityPool, _redeemAmount)[0];
-    //     }
-    // }
-
     /**
      * @dev Returns the maximum allowed deposit amount considering the percentage limit or the absolute limit
      * @param _liquidityPool Liquidity pool's contract address
-     * @param _underlyingToken Token address acting as underlying Asset for the vault contract
+     * @param _depositPool Token address acting as underlying Asset for the vault contract
      * @param _amount The amount of the underlying token to be deposited
      * @return Returns the maximum deposit allowed according to _amount and the limits set
      */
     function _getDepositAmount(
         address _liquidityPool,
-        address _underlyingToken,
+        address _depositPool,
         uint256 _amount
     ) internal view returns (uint256) {
         uint256 _limit = maxDepositProtocolMode == MaxExposure.Pct
             ? _getMaxDepositAmountByPct(_liquidityPool)
-            : maxDepositAmount[_liquidityPool][_underlyingToken];
+            : maxDepositAmount[_liquidityPool][_depositPool];
         return _amount > _limit ? _limit : _amount;
     }
 
